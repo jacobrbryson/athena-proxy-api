@@ -1,0 +1,32 @@
+{
+	"name": "proxy_service",
+	"version": "1.0.0",
+	"description": "Extensible Node reverse-proxy service (Express + http-proxy)",
+	"license": "ISC",
+	"author": "",
+	"type": "commonjs",
+	"main": "src/server.js",
+	"scripts": {
+		"dev": "nodemon src/server.js",
+		"start": "node src/server.js",
+		"lint": "eslint .",
+		"lint:fix": "eslint . --fix",
+		"format": "prettier --write .",
+		"check-format": "prettier --check .",
+		"test": "jest --runInBand",
+		"test:watch": "jest --watch",
+		"clean": "rm -rf dist",
+		"prestart": "npm run check-format"
+	},
+	"dependencies": {
+		"cors": "^2.8.5",
+		"express": "^5.1.0",
+		"http-proxy": "^1.18.1"
+	},
+	"devDependencies": {
+		"nodemon": "^3.1.0",
+		"eslint": "^9.0.0",
+		"prettier": "^3.2.0",
+		"jest": "^30.0.0"
+	}
+}
