@@ -1,4 +1,5 @@
 const { getAuthToken, IS_CLOUD_RUN } = require("../utils/auth");
+const { API_TARGET } = require("../config");
 
 module.exports = function wsProxy(server, proxy) {
 	server.on("upgrade", async (req, socket, head) => {
@@ -23,6 +24,10 @@ module.exports = function wsProxy(server, proxy) {
 			console.log("WS Auth: Skipping token generation for local dev.");
 		} // --- AUTHENTICATION LOGIC END ---
 		// Proxy the connection with the new header
-		proxy.ws(req, socket, head);
+		proxy.ws(req, socket, head, {
+			target: API_TARGET,
+			ws: true, // Crucial for telling http-proxy it's a WebSocket
+			changeOrigin: true,
+		});
 	});
 };
