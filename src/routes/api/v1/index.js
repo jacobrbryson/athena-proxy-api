@@ -5,56 +5,60 @@ const { API_TARGET } = require("../../../config");
 const { GoogleAuth } = require("google-auth-library");
 
 const router = express.Router();
-// We use the full API_TARGET URL as the audience for the token.
-// targetUrl is mainly used for reference, but API_TARGET is used as the audience.
+// Initialize the GoogleAuth instance once.
 const auth = new GoogleAuth();
 
-// CRITICAL: A variable to hold the Identity Token client
-let tokenClient;
-
-// Async function to initialize the token client on startup
-async function initializeAuth() {
-	try {
-		// getIdTokenClient automatically finds credentials (Service Account) and handles refreshing tokens.
-		// It uses the API_TARGET as the audience, which is required by Cloud Run.
-		tokenClient = await auth.getIdTokenClient(API_TARGET);
-		console.log("Authentication client initialized successfully.");
-	} catch (error) {
-		console.error("Failed to initialize Google Auth client:", error);
-		// Crash the app if auth fails, as it cannot proceed securely.
-		process.exit(1);
-	}
-}
-
-// Immediately call the initialization function
-initializeAuth();
+// READ THE SERVICE ACCOUNT EMAIL (used for local testing and explicit identity)
+const PROXY_SA_EMAIL = process.env.PROXY_SA_EMAIL;
+// If you are running locally, PROXY_SA_EMAIL must be set in your .env file
+// and you must have run 'gcloud auth application-default login'.
 
 router.use(async (req, res) => {
-	// Check if the auth client is ready
-	if (!tokenClient) {
-		return res
-			.status(503)
-			.send(
-				"Authentication client is not yet ready. Please wait a moment."
-			);
-	}
-
-	let token;
+	// --- AUTHENTICATION FIX: Use getRequestHeaders for direct ID token retrieval ---
+	let headers;
 	try {
-		// Fetch the ID token. The client handles caching/expiry.
-		token = await tokenClient.fetchIdToken(API_TARGET);
+		// This is the simplest and most robust way to get the necessary
+		// Authorization: Bearer <ID_TOKEN> header for a Cloud Run audience.
+		// It handles the identity inference (SA on Cloud Run, ADC locally).
+		headers = await auth.getRequestHeaders({
+			url: API_TARGET,
+			// Explicitly pass the Service Account Email if available.
+			// This is useful for testing locally with a specific identity.
+			targetPrincipal: PROXY_SA_EMAIL,
+		});
 	} catch (error) {
-		console.error("Failed to fetch ID token:", error);
+		console.error(
+			"Failed to fetch ID token via getRequestHeaders:",
+			error.message
+		);
+		// This confirms the underlying identity (local user or deployed SA)
+		// lacks the Service Account Token Creator role.
 		return res
 			.status(500)
 			.send(
-				"Internal Server Error: Authentication failure during token fetch."
+				"Internal Server Error: Authentication failure during token fetch. (Check Token Creator IAM Role or local ADC)"
 			);
 	}
 
-	// Add the Authorization header to the request before forwarding
-	// Cloud Run requires the 'Bearer' prefix
-	req.headers.authorization = `Bearer ${token}`;
+	// CRITICAL FIX: Check if the authorization header exists before assigning it.
+	// If headers.authorization is undefined, it means token generation failed
+	// but didn't throw an error in the try/catch block.
+	if (!headers.authorization) {
+		console.error(
+			"CRITICAL: Token generation failed. Authorization header is missing in response from GoogleAuth."
+		);
+		return res
+			.status(500)
+			.send(
+				"Internal Server Error: Token generation failed. Check permissions."
+			);
+	}
+
+	// Assign the retrieved header value (which is now guaranteed to be a string)
+	req.headers.authorization = headers.authorization;
+
+	// Logging the success state for debugging
+	console.log(`Token Status: Authorization header successfully set.`);
 
 	// Forwarding logic (now with Auth header)
 	console.log("--- PROXY REQUEST START (Authenticated) ---");
