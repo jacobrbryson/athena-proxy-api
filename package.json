@@ -15,11 +15,11 @@
 		"check-format": "prettier --check .",
 		"test": "jest --runInBand",
 		"test:watch": "jest --watch",
-		"clean": "rm -rf dist",
-		"prestart": "npm run check-format"
+		"clean": "rm -rf dist"
 	},
 	"dependencies": {
 		"cors": "^2.8.5",
+		"dotenv": "^17.2.3",
 		"express": "^5.1.0",
 		"express-rate-limit": "^8.2.1",
 		"http-proxy": "^1.18.1"

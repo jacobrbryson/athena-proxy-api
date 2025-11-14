@@ -1,3 +1,4 @@
+require("dotenv").config();
 const http = require("http");
 const express = require("express");
 const cors = require("./middleware/cors");
@@ -6,7 +7,7 @@ const router = require("./routes/index");
 const attachProxyErrorHandler = require("./proxy/errorHandler");
 const wsProxy = require("./proxy/wsProxy");
 const proxy = require("./proxy/httpProxy");
-const { PROXY_PORT } = require("./config");
+const { PORT } = require("./config");
 
 const app = express();
 
@@ -20,6 +21,6 @@ const server = http.createServer(app);
 
 wsProxy(server, proxy);
 
-server.listen(PROXY_PORT, () => {
-	console.log(`Proxy listening on http://localhost:${PROXY_PORT}`);
+server.listen(PORT, () => {
+	console.log(`Proxy listening on http://localhost:${PORT}`);
 });
