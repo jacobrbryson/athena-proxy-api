@@ -21,7 +21,7 @@ router.use((req, res) => {
 	console.log(`  User-Agent: ${req.headers["user-agent"]}`);
 	console.log("-------------------------------------------");
 
-	proxy.web(req, res);
+	proxy.web(req, res, { target: API_TARGET });
 });
 
 module.exports = router;
