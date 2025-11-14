@@ -10,20 +10,32 @@ const auth = new GoogleAuth();
 
 // READ THE SERVICE ACCOUNT EMAIL (used for local testing and explicit identity)
 const PROXY_SA_EMAIL = process.env.PROXY_SA_EMAIL;
-// If you are running locally, PROXY_SA_EMAIL must be set in your .env file
-// and you must have run 'gcloud auth application-default login'.
+
+// CRITICAL: Check if we are running in a Google Cloud environment (like Cloud Run)
+const IS_CLOUD_RUN = !!process.env.K_SERVICE;
 
 router.use(async (req, res) => {
-	// --- AUTHENTICATION FIX: Use getRequestHeaders for direct ID token retrieval ---
+	// --- AUTHENTICATION BYPASS FOR LOCAL DEV ---
+	if (!IS_CLOUD_RUN) {
+		console.log(
+			"--- LOCAL DEV MODE: Skipping token generation and forwarding unauthenticated request. ---"
+		);
+		// If local, just forward the request without the Authorization header.
+		proxy.web(req, res, {
+			target: API_TARGET,
+			changeOrigin: true,
+		});
+		return;
+	}
+	// -------------------------------------------
+
+	// --- CLOUD RUN MODE: Authentication Required ---
 	let headers;
 	try {
 		// This is the simplest and most robust way to get the necessary
 		// Authorization: Bearer <ID_TOKEN> header for a Cloud Run audience.
-		// It handles the identity inference (SA on Cloud Run, ADC locally).
 		headers = await auth.getRequestHeaders({
 			url: API_TARGET,
-			// Explicitly pass the Service Account Email if available.
-			// This is useful for testing locally with a specific identity.
 			targetPrincipal: PROXY_SA_EMAIL,
 		});
 	} catch (error) {
@@ -31,18 +43,14 @@ router.use(async (req, res) => {
 			"Failed to fetch ID token via getRequestHeaders:",
 			error.message
 		);
-		// This confirms the underlying identity (local user or deployed SA)
-		// lacks the Service Account Token Creator role.
 		return res
 			.status(500)
 			.send(
-				"Internal Server Error: Authentication failure during token fetch. (Check Token Creator IAM Role or local ADC)"
+				"Internal Server Error: Authentication failure during token fetch. (Check Token Creator IAM Role)"
 			);
 	}
 
 	// CRITICAL FIX: Check if the authorization header exists before assigning it.
-	// If headers.authorization is undefined, it means token generation failed
-	// but didn't throw an error in the try/catch block.
 	if (!headers.authorization) {
 		console.error(
 			"CRITICAL: Token generation failed. Authorization header is missing in response from GoogleAuth."
@@ -54,7 +62,7 @@ router.use(async (req, res) => {
 			);
 	}
 
-	// Assign the retrieved header value (which is now guaranteed to be a string)
+	// Assign the retrieved header value
 	req.headers.authorization = headers.authorization;
 
 	// Logging the success state for debugging
@@ -66,7 +74,6 @@ router.use(async (req, res) => {
 
 	proxy.web(req, res, {
 		target: API_TARGET,
-		// Crucial for telling the target (Cloud Run) who the intended host is
 		changeOrigin: true,
 	});
 });
