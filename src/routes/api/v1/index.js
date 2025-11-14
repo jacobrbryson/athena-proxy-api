@@ -8,9 +8,6 @@ const router = express.Router();
 // Initialize the GoogleAuth instance once.
 const auth = new GoogleAuth();
 
-// READ THE SERVICE ACCOUNT EMAIL (used for local testing and explicit identity)
-const PROXY_SA_EMAIL = process.env.PROXY_SA_EMAIL;
-
 // CRITICAL: Check if we are running in a Google Cloud environment (like Cloud Run)
 const IS_CLOUD_RUN = !!process.env.K_SERVICE;
 
@@ -32,17 +29,18 @@ router.use(async (req, res) => {
 	// --- CLOUD RUN MODE: Authentication Required ---
 	let headers;
 	try {
-		// This is the simplest and most robust way to get the necessary
-		// Authorization: Bearer <ID_TOKEN> header for a Cloud Run audience.
+		// FIX: Use the stable and reliable getRequestHeaders() method.
+		// This handles token generation and header formatting (Authorization: Bearer <token>)
+		// in one call, eliminating the 'fetchIdToken is not a function' error.
 		headers = await auth.getRequestHeaders({
-			url: API_TARGET,
-			targetPrincipal: PROXY_SA_EMAIL,
+			url: API_TARGET, // Use the target URL as the audience for the token
 		});
 	} catch (error) {
 		console.error(
 			"Failed to fetch ID token via getRequestHeaders:",
 			error.message
 		);
+		// This error usually means the Service Account lacks the Token Creator role.
 		return res
 			.status(500)
 			.send(
@@ -50,8 +48,10 @@ router.use(async (req, res) => {
 			);
 	}
 
-	// CRITICAL FIX: Check if the authorization header exists before assigning it.
+	// Check if the authorization header exists before assigning it.
 	if (!headers.authorization) {
+		// This is the error you were seeing after the TypeError was fixed,
+		// confirming a hard IAM permission failure.
 		console.error(
 			"CRITICAL: Token generation failed. Authorization header is missing in response from GoogleAuth."
 		);
@@ -62,7 +62,7 @@ router.use(async (req, res) => {
 			);
 	}
 
-	// Assign the retrieved header value
+	// Assign the retrieved header value (which is now guaranteed to be 'Authorization: Bearer <token>')
 	req.headers.authorization = headers.authorization;
 
 	// Logging the success state for debugging
