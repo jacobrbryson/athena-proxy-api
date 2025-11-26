@@ -7,6 +7,9 @@ const METADATA_URL =
 // 1. Caching Variables
 let cachedToken = null;
 let tokenExpiry = 0; // Epoch time in milliseconds
+const { OAuth2Client } = require("google-auth-library");
+const config = require("../config");
+const client = new OAuth2Client(config.GOOGLE_CLIENT_ID);
 
 // Set a max cache duration (e.g., 55 minutes) to ensure a refresh buffer
 const TOKEN_MAX_LIFETIME_MS = 55 * 60 * 1000;
@@ -60,7 +63,27 @@ async function getAuthToken() {
 	}
 }
 
+/**
+ * Helper function to verify the Google ID token.
+ * @param {string} token - The JWT ID token from the frontend.
+ * @returns {object|null} The verified payload, or null if verification fails.
+ */
+async function verifyGoogleToken(token) {
+	try {
+		const ticket = await client.verifyIdToken({
+			idToken: token,
+			audience: config.GOOGLE_CLIENT_ID,
+		});
+		// The payload contains user info (sub, email, name, picture, etc.)
+		return ticket.getPayload();
+	} catch (error) {
+		console.error("Google token verification failed:", error.message);
+		return null;
+	}
+}
+
 module.exports = {
 	getAuthToken,
 	IS_CLOUD_RUN: !!process.env.K_SERVICE,
+	verifyGoogleToken,
 };

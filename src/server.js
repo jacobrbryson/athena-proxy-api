@@ -15,6 +15,7 @@ app.set("trust proxy", 1);
 
 app.use(cors);
 app.use(rateLimiter);
+app.use(express.json());
 app.use("/", router);
 
 attachProxyErrorHandler(proxy);
