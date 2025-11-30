@@ -40,12 +40,19 @@ router.post("/auth/google", jsonParser, async (req, res) => {
 			.status(401)
 			.json({ error: "Invalid or expired Google token" });
 
-	const { sub: googleId, email } = googlePayload;
+	const {
+		sub: google_id,
+		email,
+		name: full_name,
+		picture,
+	} = googlePayload;
 
 	const appJwt = jwt.sign(
 		{
-			googleId: googleId,
-			email: email,
+			google_id,
+			email,
+			full_name,
+			picture,
 		},
 		config.JWT_SECRET,
 		{ expiresIn: "7d" }
