@@ -74,6 +74,11 @@ router.use(async (req, res) => {
 		console.log(`Authenticated user: ${req.user.email}`);
 	}
 
+	// Preserve the original Authorization header for downstream app use
+	if (req.headers.authorization) {
+		req.headers["x-user-authorization"] = req.headers.authorization;
+	}
+
 	// --- AUTHENTICATION BYPASS FOR LOCAL DEV ---
 	if (!IS_CLOUD_RUN) {
 		console.log("--- LOCAL DEV MODE: Skipping token generation. ---");
