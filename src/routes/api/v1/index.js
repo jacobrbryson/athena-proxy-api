@@ -40,12 +40,8 @@ router.post("/auth/google", jsonParser, async (req, res) => {
 			.status(401)
 			.json({ error: "Invalid or expired Google token" });
 
-	const {
-		sub: google_id,
-		email,
-		name: full_name,
-		picture,
-	} = googlePayload;
+	const { sub: google_id, email, name: full_name, picture } = googlePayload;
+	const client_ip = req.ip; // trust proxy is enabled in server.js
 
 	const appJwt = jwt.sign(
 		{
@@ -53,6 +49,7 @@ router.post("/auth/google", jsonParser, async (req, res) => {
 			email,
 			full_name,
 			picture,
+			client_ip,
 		},
 		config.JWT_SECRET,
 		{ expiresIn: "7d" }

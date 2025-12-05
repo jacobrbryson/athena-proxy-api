@@ -1,5 +1,12 @@
-const { getAuthToken, IS_CLOUD_RUN } = require("../utils/auth");
-const { API_TARGET } = require("../config");
+const jwt = require("jsonwebtoken");
+const { API_TARGET, JWT_SECRET } = require("../config");
+
+function normalizeIp(ip) {
+	if (!ip) return null;
+	if (ip.startsWith("::ffff:")) return ip.slice(7);
+	if (ip === "::1") return "127.0.0.1";
+	return ip;
+}
 
 module.exports = function wsProxy(server, proxy) {
 	server.on("upgrade", async (req, socket, head) => {
@@ -9,20 +16,39 @@ module.exports = function wsProxy(server, proxy) {
 		if (!req.url.startsWith("/ws")) {
 			socket.destroy();
 			return;
-		} // --- AUTHENTICATION LOGIC START ---
-		if (IS_CLOUD_RUN) {
-			try {
-				const token = await getAuthToken(); // Modify the request headers to include the ID token
-				req.headers.authorization = `Bearer ${token}`;
-				console.log("WS Auth: Token successfully added to headers.");
-			} catch (error) {
-				console.error("WS Auth Failure:", error.message); // Fail the connection if authentication fails
+		}
+
+		const authHeader =
+			req.headers["x-user-authorization"] || req.headers.authorization;
+		if (!authHeader || !authHeader.startsWith("Bearer ")) {
+			console.warn("WS Auth: Missing bearer token");
+			socket.destroy();
+			return;
+		}
+
+		try {
+			const token = authHeader.slice("Bearer ".length);
+			const decoded = jwt.verify(token, JWT_SECRET);
+
+			const tokenIp = normalizeIp(decoded.client_ip);
+			const requestIp = normalizeIp(req.socket.remoteAddress);
+			if (!tokenIp || tokenIp !== requestIp) {
+				console.warn(
+					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`
+				);
 				socket.destroy();
 				return;
 			}
-		} else {
-			console.log("WS Auth: Skipping token generation for local dev.");
-		} // --- AUTHENTICATION LOGIC END ---
+
+			// forward the validated user token to the API service
+			req.headers.authorization = `Bearer ${token}`;
+			req.headers["x-user-authorization"] = `Bearer ${token}`;
+		} catch (error) {
+			console.error("WS Auth: token verification failed", error.message);
+			socket.destroy();
+			return;
+		}
+
 		// Proxy the connection with the new header
 		proxy.ws(req, socket, head, {
 			target: API_TARGET,
