@@ -20,14 +20,29 @@ module.exports = function wsProxy(server, proxy) {
 
 		const authHeader =
 			req.headers["x-user-authorization"] || req.headers.authorization;
-		if (!authHeader || !authHeader.startsWith("Bearer ")) {
+
+		const url = new URL(req.url, "http://localhost");
+		const queryToken = url.searchParams.get("token");
+
+		let token =
+			authHeader && authHeader.startsWith("Bearer ")
+				? authHeader.slice("Bearer ".length)
+				: null;
+
+		// Fallback: allow token via query param (since browsers can't set WS headers)
+		if (!token && queryToken) {
+			token = queryToken.startsWith("Bearer ")
+				? queryToken.slice("Bearer ".length)
+				: queryToken;
+		}
+
+		if (!token) {
 			console.warn("WS Auth: Missing bearer token");
 			socket.destroy();
 			return;
 		}
 
 		try {
-			const token = authHeader.slice("Bearer ".length);
 			const decoded = jwt.verify(token, JWT_SECRET);
 
 			const tokenIp = normalizeIp(decoded.client_ip);
