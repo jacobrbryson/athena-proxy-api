@@ -8,10 +8,18 @@ function normalizeIp(ip) {
 	return ip;
 }
 
+function redactWsUrl(reqUrl) {
+	const url = new URL(reqUrl, "http://localhost");
+	if (url.searchParams.has("token")) {
+		url.searchParams.set("token", "[REDACTED]");
+	}
+	return `${url.pathname}${url.search}`;
+}
+
 module.exports = function wsProxy(server, proxy) {
 	server.on("upgrade", async (req, socket, head) => {
 		// NOTE: Use 'async' here!
-		console.log(`WS upgrade: ${req.url}`);
+		console.log(`WS upgrade: ${redactWsUrl(req.url)}`);
 
 		if (!req.url.startsWith("/ws")) {
 			socket.destroy();
@@ -20,14 +28,28 @@ module.exports = function wsProxy(server, proxy) {
 
 		const authHeader =
 			req.headers["x-user-authorization"] || req.headers.authorization;
-		if (!authHeader || !authHeader.startsWith("Bearer ")) {
+		const url = new URL(req.url, "http://localhost");
+		const queryToken = url.searchParams.get("token");
+
+		let token =
+			authHeader && authHeader.startsWith("Bearer ")
+				? authHeader.slice("Bearer ".length)
+				: null;
+
+		// Fallback: allow token via query param (since browsers can't set WS headers)
+		if (!token && queryToken) {
+			token = queryToken.startsWith("Bearer ")
+				? queryToken.slice("Bearer ".length)
+				: queryToken;
+		}
+
+		if (!token) {
 			console.warn("WS Auth: Missing bearer token");
 			socket.destroy();
 			return;
 		}
 
 		try {
-			const token = authHeader.slice("Bearer ".length);
 			const decoded = jwt.verify(token, JWT_SECRET);
 
 			const tokenIp = normalizeIp(decoded.client_ip);
