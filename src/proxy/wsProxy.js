@@ -56,7 +56,7 @@ module.exports = function wsProxy(server, proxy) {
 			const requestIp = normalizeIp(req.socket.remoteAddress);
 			if (!tokenIp || tokenIp !== requestIp) {
 				console.warn(
-					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`
+					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`,
 				);
 				socket.destroy();
 				return;
