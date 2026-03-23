@@ -8,6 +8,23 @@ function normalizeIp(ip) {
 	return ip;
 }
 
+function extractRequestIp(req) {
+	const forwarded = req.headers["x-forwarded-for"];
+	if (forwarded) {
+		const forwardedList = Array.isArray(forwarded)
+			? forwarded
+			: String(forwarded)
+					.split(",")
+					.map((ip) => ip.trim())
+					.filter(Boolean);
+
+		const clientIp = normalizeIp(forwardedList[0] || null);
+		if (clientIp) return clientIp;
+	}
+
+	return normalizeIp(req.socket.remoteAddress);
+}
+
 function redactWsUrl(reqUrl) {
 	const url = new URL(reqUrl, "http://localhost");
 	if (url.searchParams.has("token")) {
@@ -53,7 +70,7 @@ module.exports = function wsProxy(server, proxy) {
 			const decoded = jwt.verify(token, JWT_SECRET);
 
 			const tokenIp = normalizeIp(decoded.client_ip);
-			const requestIp = normalizeIp(req.socket.remoteAddress);
+			const requestIp = extractRequestIp(req);
 			if (!tokenIp || tokenIp !== requestIp) {
 				console.warn(
 					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`,
