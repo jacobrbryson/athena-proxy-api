@@ -8,10 +8,18 @@ function normalizeIp(ip) {
 	return ip;
 }
 
+function redactWsUrl(reqUrl) {
+	const url = new URL(reqUrl, "http://localhost");
+	if (url.searchParams.has("token")) {
+		url.searchParams.set("token", "[REDACTED]");
+	}
+	return `${url.pathname}${url.search}`;
+}
+
 module.exports = function wsProxy(server, proxy) {
 	server.on("upgrade", async (req, socket, head) => {
 		// NOTE: Use 'async' here!
-		console.log(`WS upgrade: ${req.url}`);
+		console.log(`WS upgrade: ${redactWsUrl(req.url)}`);
 
 		if (!req.url.startsWith("/ws")) {
 			socket.destroy();
