@@ -45,7 +45,6 @@ module.exports = function wsProxy(server, proxy) {
 
 		const authHeader =
 			req.headers["x-user-authorization"] || req.headers.authorization;
-
 		const url = new URL(req.url, "http://localhost");
 		const queryToken = url.searchParams.get("token");
 
@@ -74,7 +73,7 @@ module.exports = function wsProxy(server, proxy) {
 			const requestIp = extractRequestIp(req);
 			if (!tokenIp || tokenIp !== requestIp) {
 				console.warn(
-					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`
+					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`,
 				);
 				socket.destroy();
 				return;
