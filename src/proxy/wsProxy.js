@@ -1,5 +1,6 @@
 const jwt = require("jsonwebtoken");
 const { API_TARGET, JWT_SECRET } = require("../config");
+const { getAuthToken, IS_CLOUD_RUN } = require("../utils/auth");
 
 function normalizeIp(ip) {
 	if (!ip) return null;
@@ -79,9 +80,16 @@ module.exports = function wsProxy(server, proxy) {
 				return;
 			}
 
-			// forward the validated user token to the API service
-			req.headers.authorization = `Bearer ${token}`;
+			// Preserve the validated user token for downstream app auth.
 			req.headers["x-user-authorization"] = `Bearer ${token}`;
+
+			// In Cloud Run, the upstream service also needs an invoker token.
+			if (IS_CLOUD_RUN) {
+				const serviceToken = await getAuthToken();
+				req.headers.authorization = `Bearer ${serviceToken}`;
+			} else {
+				req.headers.authorization = `Bearer ${token}`;
+			}
 		} catch (error) {
 			console.error("WS Auth: token verification failed", error.message);
 			socket.destroy();

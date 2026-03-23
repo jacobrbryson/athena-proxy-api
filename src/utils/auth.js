@@ -1,6 +1,6 @@
 // src/utils/auth.js
 
-const { API_TARGET } = require("../config");
+const { API_AUDIENCE } = require("../config");
 const METADATA_URL =
 	"http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/identity";
 
@@ -28,7 +28,7 @@ async function getAuthToken() {
 	console.log(
 		"Auth: Cache miss or expiry. Fetching new token from metadata server."
 	);
-	const tokenFetchUrl = `${METADATA_URL}?audience=${API_TARGET}&format=full`;
+	const tokenFetchUrl = `${METADATA_URL}?audience=${API_AUDIENCE}&format=full`;
 
 	try {
 		const tokenResponse = await fetch(tokenFetchUrl, {
