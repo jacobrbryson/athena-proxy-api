@@ -34,19 +34,6 @@ proxy.on("proxyReq", (proxyReq, req, res, options) => {
 	}
 });
 
-// --- 2. PROXY ERROR HANDLING (Optional but Recommended) ---
-// Add a listener to catch errors when the proxy fails to connect to the target API
-proxy.on("error", (err, req, res) => {
-	console.error(
-		"*** HTTP PROXY FAILED TO FORWARD REQUEST ***",
-		err.message
-	);
-	if (!res.headersSent) {
-		res.writeHead(502, { "Content-Type": "text/plain" });
-		res.end("Proxy Error: Bad Gateway.");
-	}
-});
-
 // Export an object containing both the proxy instance and the parser utility
 module.exports = {
 	proxy,
