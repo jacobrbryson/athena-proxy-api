@@ -16,11 +16,27 @@ function normalizeIp(ip) {
 const verifyAppToken = (req, res, next) => {
 	const authHeader = req.headers.authorization;
 
-	if (!authHeader || !authHeader.startsWith("Bearer ")) {
-		return res.status(401).json({ error: "Access denied. JWT required." });
+	// Primary: bearer header (marketing app, service-to-service).
+	// Fallback: Guardian session cookie (the Guardians app stores its JWT in an
+	// httpOnly cookie, so the browser can't attach an Authorization header).
+	let token =
+		authHeader && authHeader.startsWith("Bearer ")
+			? authHeader.split(" ")[1]
+			: null;
+
+	if (!token) {
+		const cookieToken = req.cookies?.[config.GUARDIAN_SESSION_COOKIE];
+		if (cookieToken) {
+			token = cookieToken;
+			// Re-expose as a bearer header so the downstream forwarding logic
+			// (copy to x-user-authorization) treats it like any other token.
+			req.headers.authorization = `Bearer ${token}`;
+		}
 	}
 
-	const token = authHeader.split(" ")[1];
+	if (!token) {
+		return res.status(401).json({ error: "Access denied. JWT required." });
+	}
 
 	try {
 		const decodedPayload = jwt.verify(token, APP_SECRET_KEY);

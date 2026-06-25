@@ -1,6 +1,19 @@
 const jwt = require("jsonwebtoken");
-const { API_TARGET, JWT_SECRET } = require("../config");
+const { API_TARGET, JWT_SECRET, GUARDIAN_SESSION_COOKIE } = require("../config");
 const { getAuthToken, IS_CLOUD_RUN } = require("../utils/auth");
+
+/** Read a single cookie value from a raw Cookie header (no cookie-parser on upgrades). */
+function getCookie(cookieHeader, name) {
+	if (!cookieHeader) return null;
+	for (const part of cookieHeader.split(";")) {
+		const idx = part.indexOf("=");
+		if (idx === -1) continue;
+		if (part.slice(0, idx).trim() === name) {
+			return decodeURIComponent(part.slice(idx + 1).trim());
+		}
+	}
+	return null;
+}
 
 function normalizeIp(ip) {
 	if (!ip) return null;
@@ -59,6 +72,12 @@ module.exports = function wsProxy(server, proxy) {
 			token = queryToken.startsWith("Bearer ")
 				? queryToken.slice("Bearer ".length)
 				: queryToken;
+		}
+
+		// Fallback: Guardian session cookie (sent automatically on the upgrade
+		// request by the browser when the Guardians app opens its WebSocket).
+		if (!token) {
+			token = getCookie(req.headers.cookie, GUARDIAN_SESSION_COOKIE);
 		}
 
 		if (!token) {

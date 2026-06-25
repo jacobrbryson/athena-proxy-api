@@ -1,6 +1,7 @@
 require("dotenv").config();
 const http = require("http");
 const express = require("express");
+const cookieParser = require("cookie-parser");
 const cors = require("./middleware/cors");
 const rateLimiter = require("./middleware/rateLimiter");
 const router = require("./routes/index");
@@ -14,6 +15,7 @@ const app = express();
 app.set("trust proxy", 1);
 
 app.use(cors);
+app.use(cookieParser());
 app.use(rateLimiter);
 app.use("/", router);
 
