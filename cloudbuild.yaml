@@ -36,7 +36,7 @@ steps:
       - "--update-secrets=JWT_SECRET=JWT_SECRET:latest"
 
       # --- Non-secret runtime config (custom ^@^ delimiter so values can contain commas) ---
-      - "--set-env-vars=^@^GOOGLE_CLIENT_ID=$_GOOGLE_CLIENT_ID@API_TARGET=$_API_TARGET@API_AUDIENCE=$_API_AUDIENCE"
+      - "--set-env-vars=^@^GOOGLE_CLIENT_ID=$_GOOGLE_CLIENT_ID@API_TARGET=$_API_TARGET@API_AUDIENCE=$_API_AUDIENCE@CORS_ALLOWED_ORIGINS=$_CORS_ALLOWED_ORIGINS"
 
 # The final image tag is saved in the Artifact Registry
 images:
@@ -51,5 +51,6 @@ substitutions:
   # The PRIVATE core_api URL this proxy forwards to (set both to the core_api Cloud Run URL).
   _API_TARGET: "https://athena-core-api-12367074465.us-central1.run.app"
   _API_AUDIENCE: "https://athena-core-api-12367074465.us-central1.run.app"
+  _CORS_ALLOWED_ORIGINS: "https://athena-guardians-mlkumvppsa-uc.a.run.app"
 options:
   logging: CLOUD_LOGGING_ONLY
