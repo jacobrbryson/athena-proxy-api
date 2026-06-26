@@ -8,7 +8,7 @@ const router = express.Router();
 router.get("/healthz", (req, res) => res.json({ status: "ok" }));
 
 // Guardian session auth (httpOnly-cookie based):
-//   /auth/guardian-login, /auth/me, /auth/logout
+//   /auth/guardian-login, /auth/guardian-qr-login, /auth/me, /auth/logout
 router.use("/auth", guardianAuth);
 
 router.use("/api/v1", apiV1);
