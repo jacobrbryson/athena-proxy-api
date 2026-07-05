@@ -259,6 +259,47 @@ router.get("/me", (req, res) => {
 });
 
 // -------------------------------------------------------------------
+// GET /auth/ws-ticket — short-lived WebSocket auth ticket
+// -------------------------------------------------------------------
+// Safari does not reliably attach the cross-site session cookie to WebSocket
+// upgrade requests (ITP), so the client exchanges the cookie — over a regular
+// fetch, which DOES carry it — for a 60-second token and opens the socket
+// with ?token=..., a path wsProxy already accepts. Minting it moments before
+// the upgrade (with the current request IP) also tolerates egress-IP drift
+// since login (e.g. iCloud Private Relay) far better than the session JWT.
+const WS_TICKET_TTL_SECONDS = 60;
+
+router.get("/ws-ticket", (req, res) => {
+	const token = req.cookies?.[config.GUARDIAN_SESSION_COOKIE];
+	if (!token || !config.JWT_SECRET) {
+		return res.status(401).json({ success: false, message: "Not authenticated" });
+	}
+	try {
+		const decoded = jwt.verify(token, config.JWT_SECRET);
+		if (decoded.kind !== "guardian") {
+			return res.status(401).json({ success: false, message: "Not authenticated" });
+		}
+		const ticket = jwt.sign(
+			{
+				kind: "guardian",
+				purpose: "ws",
+				credential_id: decoded.credential_id,
+				guardian_id: decoded.guardian_id,
+				display_name: decoded.display_name,
+				adventure_key: decoded.adventure_key,
+				participant_type: decoded.participant_type,
+				client_ip: req.ip, // trust proxy is enabled in server.js
+			},
+			config.JWT_SECRET,
+			{ expiresIn: WS_TICKET_TTL_SECONDS }
+		);
+		return res.json({ success: true, ticket, expires_in: WS_TICKET_TTL_SECONDS });
+	} catch {
+		return res.status(401).json({ success: false, message: "Not authenticated" });
+	}
+});
+
+// -------------------------------------------------------------------
 // POST /auth/logout — clear the session cookie
 // -------------------------------------------------------------------
 router.post("/logout", (req, res) => {

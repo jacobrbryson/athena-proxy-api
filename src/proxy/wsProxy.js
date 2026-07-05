@@ -39,6 +39,29 @@ function extractRequestIp(req) {
 	return normalizeIp(req.socket.remoteAddress);
 }
 
+/**
+ * Reject an upgrade with a real HTTP response before closing. A bare
+ * socket.destroy() reads as a network failure in the browser (Safari in
+ * particular retry-loops on it), whereas a 401 fails fast and is visible in
+ * devtools — which also makes auth issues debuggable from the field.
+ */
+function rejectUpgrade(socket, status, reason) {
+	try {
+		if (socket.writable) {
+			socket.write(
+				`HTTP/1.1 ${status}\r\n` +
+					"Connection: close\r\n" +
+					"Content-Length: 0\r\n" +
+					`X-WS-Reject-Reason: ${reason}\r\n` +
+					"\r\n"
+			);
+		}
+	} catch {
+		// Socket already gone — nothing to write to.
+	}
+	socket.destroy();
+}
+
 function redactWsUrl(reqUrl) {
 	const url = new URL(reqUrl, "http://localhost");
 	if (url.searchParams.has("token")) {
@@ -82,7 +105,7 @@ module.exports = function wsProxy(server, proxy) {
 
 		if (!token) {
 			console.warn("WS Auth: Missing bearer token");
-			socket.destroy();
+			rejectUpgrade(socket, "401 Unauthorized", "missing-token");
 			return;
 		}
 
@@ -95,7 +118,7 @@ module.exports = function wsProxy(server, proxy) {
 				console.warn(
 					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`,
 				);
-				socket.destroy();
+				rejectUpgrade(socket, "401 Unauthorized", "ip-mismatch");
 				return;
 			}
 
@@ -111,7 +134,7 @@ module.exports = function wsProxy(server, proxy) {
 			}
 		} catch (error) {
 			console.error("WS Auth: token verification failed", error.message);
-			socket.destroy();
+			rejectUpgrade(socket, "401 Unauthorized", "invalid-token");
 			return;
 		}
 
