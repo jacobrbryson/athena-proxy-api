@@ -51,6 +51,8 @@ substitutions:
   # The PRIVATE core_api URL this proxy forwards to (set both to the core_api Cloud Run URL).
   _API_TARGET: "https://athena-core-api-12367074465.us-central1.run.app"
   _API_AUDIENCE: "https://athena-core-api-12367074465.us-central1.run.app"
-  _CORS_ALLOWED_ORIGINS: "https://athena-guardians-mlkumvppsa-uc.a.run.app,https://athena-guardians-12367074465.us-central1.run.app"
+  # Browser apps that authenticate with an httpOnly cookie (Guardians, Companion).
+  # Both Cloud Run URL forms of each service are listed.
+  _CORS_ALLOWED_ORIGINS: "https://athena-guardians-mlkumvppsa-uc.a.run.app,https://athena-guardians-12367074465.us-central1.run.app,https://athena-companion-mlkumvppsa-uc.a.run.app,https://athena-companion-12367074465.us-central1.run.app"
 options:
   logging: CLOUD_LOGGING_ONLY
