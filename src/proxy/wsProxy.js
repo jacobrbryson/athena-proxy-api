@@ -1,5 +1,10 @@
 const jwt = require("jsonwebtoken");
-const { API_TARGET, JWT_SECRET, GUARDIAN_SESSION_COOKIE } = require("../config");
+const {
+	API_TARGET,
+	JWT_SECRET,
+	GUARDIAN_SESSION_COOKIE,
+	COMPANION_SESSION_COOKIE,
+} = require("../config");
 const { getAuthToken, IS_CLOUD_RUN } = require("../utils/auth");
 
 /** Read a single cookie value from a raw Cookie header (no cookie-parser on upgrades). */

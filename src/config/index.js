@@ -32,5 +32,12 @@ module.exports = {
 		process.env.GUARDIAN_LOGIN_MAX_FAILURES || 10
 	),
 
+	// --- Companion app (Google sign-in, httpOnly cookie) ---
+	COMPANION_SESSION_COOKIE:
+		process.env.COMPANION_SESSION_COOKIE || "companion_session",
+	COMPANION_SESSION_TTL_HOURS: Number(
+		process.env.COMPANION_SESSION_TTL_HOURS || 24 * 7
+	),
+
 	CORS_ALLOWED_ORIGINS,
 };

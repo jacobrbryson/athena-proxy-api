@@ -7,6 +7,7 @@ const config = require("../../../config");
 const { verifyGoogleToken } = require("../../../utils/auth");
 const jwt = require("jsonwebtoken");
 const verifyAppToken = require("../../../middleware/auth");
+const rateLimit = require("express-rate-limit");
 
 const router = express.Router();
 
@@ -200,6 +201,46 @@ router.post(
 	jsonParser,
 	forwardPartnerRequest("/integrations/family-chores/disconnect-child")
 );
+
+// -------------------------------------------------------------------
+// 1d. COMPANION PUBLIC ENDPOINTS
+// -------------------------------------------------------------------
+// Pairing-code redemption (the short-lived code IS the credential) and the
+// on-device model manifest (no secrets). Declared before verifyAppToken.
+// Pairing is throttled hard per IP so codes can't be brute-forced.
+const pairLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 10,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { success: false, message: "Too many pairing attempts. Please wait and try again." },
+});
+
+function forwardPublic(method, path) {
+	return async (req, res) => {
+		try {
+			const headers = { "Content-Type": "application/json" };
+			if (IS_CLOUD_RUN) {
+				headers.authorization = `Bearer ${await getAuthToken()}`;
+			}
+			const upstream = await fetch(`${API_TARGET}${path}`, {
+				method,
+				headers,
+				body: method === "GET" ? undefined : JSON.stringify(req.body || {}),
+			});
+			const data = await upstream.json().catch(() => ({}));
+			const cache = upstream.headers.get("cache-control");
+			if (cache) res.set("Cache-Control", cache);
+			return res.status(upstream.status).json(data);
+		} catch (err) {
+			console.error(`[PROXY] ${method} ${path} failed:`, err.message);
+			return res.status(502).json({ success: false, message: "Failed to reach Athena API" });
+		}
+	};
+}
+
+router.post("/devices/pair", pairLimiter, jsonParser, forwardPublic("POST", "/devices/pair"));
+router.get("/llm/manifest", forwardPublic("GET", "/llm/manifest"));
 
 // -------------------------------------------------------------------
 // 2. PROXY MIDDLEWARE (Handles all other routes)

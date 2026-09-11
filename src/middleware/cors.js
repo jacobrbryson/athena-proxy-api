@@ -27,7 +27,7 @@ module.exports = function corsMiddleware(req, res, next) {
 	);
 	res.setHeader(
 		"Access-Control-Allow-Headers",
-		"Content-Type, Authorization"
+		"Content-Type, Authorization, X-Athena-Client, X-Athena-Device-Token"
 	);
 
 	if (req.method === "OPTIONS") {
