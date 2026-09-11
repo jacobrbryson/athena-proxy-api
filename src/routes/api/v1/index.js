@@ -47,6 +47,7 @@ router.post("/auth/google", jsonParser, async (req, res) => {
 	const appJwt = jwt.sign(
 		{
 			google_id,
+			email_verified: googlePayload.email_verified === true,
 			email,
 			full_name,
 			picture,
@@ -248,6 +249,8 @@ router.get("/llm/manifest", forwardPublic("GET", "/llm/manifest"));
 
 // This middleware runs on all subsequent requests that didn't match /auth/google
 router.use(verifyAppToken);
+router.use("/access", rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
+	message: { message: "Too many access checks. Please wait and retry." } }));
 
 router.use(async (req, res) => {
 	// Check if req.user exists (optional, but good for clarity)

@@ -2,7 +2,7 @@ const express = require("express");
 const jwt = require("jsonwebtoken");
 const rateLimit = require("express-rate-limit");
 const config = require("../config");
-const { verifyGoogleToken, IS_CLOUD_RUN } = require("../utils/auth");
+const { verifyGoogleToken, getAuthToken, IS_CLOUD_RUN } = require("../utils/auth");
 
 /**
  * Companion app authentication (Google sign-in, httpOnly cookie).
@@ -66,16 +66,29 @@ router.post("/companion/google", loginLimiter, jsonParser, async (req, res) => {
 	if (!googleToken) return res.status(400).json({ success: false, message: "Missing Google credential" });
 
 	const payload = await verifyGoogleToken(googleToken);
-	if (!payload) return res.status(401).json({ success: false, message: "Google sign-in could not be verified." });
+	if (!payload || payload.email_verified !== true) return res.status(401).json({ success: false, message: "A verified Google email is required." });
 
 	const { sub: google_id, email, name: full_name, picture } = payload;
 	const token = jwt.sign(
-		{ app: "companion", google_id, email, full_name, picture, client_ip: req.ip },
+		{ app: "companion", google_id, email, email_verified: true, full_name, picture, client_ip: req.ip },
 		config.JWT_SECRET,
 		{ expiresIn: SESSION_TTL_SECONDS }
 	);
+	// Audit at sign-in itself, even if the visitor never loads the frontend.
+	// A DB/API outage must not produce an unlogged usable session.
+	let access;
+	try {
+		const headers = { "x-user-authorization": `Bearer ${token}`, "x-forwarded-for": req.ip };
+		if (IS_CLOUD_RUN) headers.authorization = `Bearer ${await getAuthToken()}`;
+		const upstream = await fetch(`${config.API_TARGET}/access`, { headers, signal: AbortSignal.timeout(10000) });
+		if (!upstream.ok) throw new Error("Access verification failed");
+		access = await upstream.json();
+		if (typeof access.allowed !== "boolean") throw new Error("Invalid access response");
+	} catch {
+		return res.status(503).json({ success: false, message: "Access verification is unavailable. Please retry." });
+	}
 	res.cookie(config.COMPANION_SESSION_COOKIE, token, cookieOptions());
-	return res.json({ success: true, user: publicUser({ email, full_name, picture }) });
+	return res.json({ success: true, user: publicUser({ email, full_name, picture }), access });
 });
 
 router.get("/companion/me", (req, res) => {
@@ -93,6 +106,7 @@ router.get("/companion/ws-ticket", (req, res) => {
 			purpose: "ws",
 			google_id: s.google_id,
 			email: s.email,
+			email_verified: s.email_verified === true,
 			full_name: s.full_name,
 			picture: s.picture,
 			client_ip: req.ip,
