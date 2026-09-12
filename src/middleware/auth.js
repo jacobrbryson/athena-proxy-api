@@ -61,7 +61,9 @@ const verifyAppToken = (req, res, next) => {
 	}
 
 	if (!token) {
-		return res.status(401).json({ error: "Access denied. JWT required." });
+		return res
+			.status(401)
+			.json({ error: "Access denied. JWT required.", code: "TOKEN_REQUIRED" });
 	}
 
 	try {
@@ -69,10 +71,14 @@ const verifyAppToken = (req, res, next) => {
 
 		const tokenIp = normalizeIp(decodedPayload.client_ip);
 		const requestIp = normalizeIp(req.ip);
+		// A browser left open long enough routinely returns on a new IP (DHCP
+		// renewal, CGNAT, Private Relay, Wi-Fi -> cellular). The code lets the
+		// client re-pin its session cookie and retry instead of showing the
+		// person a dead app or, worse, an "access revoked" screen.
 		if (!tokenIp || tokenIp !== requestIp) {
 			return res
 				.status(401)
-				.json({ error: "IP mismatch for provided token." });
+				.json({ error: "IP mismatch for provided token.", code: "IP_MISMATCH" });
 		}
 
 		req.user = decodedPayload;
@@ -80,7 +86,9 @@ const verifyAppToken = (req, res, next) => {
 		next();
 	} catch (error) {
 		console.error("JWT verification failed:", error.message);
-		return res.status(401).json({ error: "Invalid or expired token." });
+		return res
+			.status(401)
+			.json({ error: "Invalid or expired token.", code: "TOKEN_INVALID" });
 	}
 };
 

@@ -10,6 +10,7 @@ const { verifyGoogleToken, getAuthToken, IS_CLOUD_RUN } = require("../utils/auth
  *   POST /auth/companion/google      Google ID token -> session cookie
  *   GET  /auth/companion/me          current user from the cookie
  *   GET  /auth/companion/ws-ticket   60s WebSocket ticket (Safari/ITP-safe)
+ *   POST /auth/companion/refresh     re-pin the session to the current IP
  *   POST /auth/companion/logout      clear the cookie
  *
  * Mirrors the Guardian cookie flow (see guardianAuth.js): the JWT is minted
@@ -33,6 +34,16 @@ function cookieOptions() {
 		? { ...base, secure: true, sameSite: "none" }
 		: { ...base, secure: false, sameSite: "lax" };
 }
+
+// Re-pinning is cheap and idempotent, but it is still a token-minting route:
+// cap it well above normal use (one per IP change) and far below abuse.
+const refreshLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 60,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { success: false, message: "Too many refresh attempts. Please wait and try again." },
+});
 
 const loginLimiter = rateLimit({
 	windowMs: 15 * 60 * 1000,
@@ -115,6 +126,47 @@ router.get("/companion/ws-ticket", (req, res) => {
 		{ expiresIn: WS_TICKET_TTL_SECONDS }
 	);
 	return res.json({ success: true, ticket, expires_in: WS_TICKET_TTL_SECONDS });
+});
+
+/**
+ * Re-issue the session cookie pinned to the CURRENT client IP.
+ *
+ * The session JWT is IP-pinned (see middleware/auth.js), but a browser left
+ * open overnight routinely comes back on a new IP (DHCP renewal, CGNAT,
+ * iCloud Private Relay, Wi-Fi -> cellular). Without this the cookie is still
+ * valid yet every /api/v1 call 401s, which used to read to the user as "your
+ * access was revoked". The client calls this on a 401 and retries once.
+ *
+ * This does not widen what a stolen cookie can do: /companion/ws-ticket
+ * already mints a current-IP token from this same IP-unchecked cookie, so the
+ * pin has always been a replay speed-bump rather than a binding. What it
+ * deliberately keeps is the ABSOLUTE expiry — the new token inherits the
+ * original `exp`, so refreshing can never extend a session past its TTL.
+ */
+router.post("/companion/refresh", refreshLimiter, (req, res) => {
+	const s = readSession(req);
+	if (!s) {
+		return res.status(401).json({ success: false, code: "SESSION_EXPIRED", message: "Not authenticated" });
+	}
+	const remaining = Number(s.exp) - Math.floor(Date.now() / 1000);
+	if (!Number.isFinite(remaining) || remaining <= 0) {
+		return res.status(401).json({ success: false, code: "SESSION_EXPIRED", message: "Session expired" });
+	}
+	const token = jwt.sign(
+		{
+			app: "companion",
+			google_id: s.google_id,
+			email: s.email,
+			email_verified: s.email_verified === true,
+			full_name: s.full_name,
+			picture: s.picture,
+			client_ip: req.ip,
+		},
+		config.JWT_SECRET,
+		{ expiresIn: remaining }
+	);
+	res.cookie(config.COMPANION_SESSION_COOKIE, token, { ...cookieOptions(), maxAge: remaining * 1000 });
+	return res.json({ success: true, user: publicUser(s) });
 });
 
 router.post("/companion/logout", (req, res) => {
