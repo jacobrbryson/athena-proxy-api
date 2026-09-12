@@ -5,8 +5,12 @@ const companionAuth = require("./companionAuth");
 
 const router = express.Router();
 
-// Health check for Cloud Run / uptime probes.
-router.get("/healthz", (req, res) => res.json({ status: "ok" }));
+// Health check for Cloud Run / uptime probes. Both spellings on purpose: the
+// Google frontend answers a bare `/healthz` itself with its own 404 page and
+// never forwards it, so an external probe on that path reports the service
+// down while it is perfectly healthy. `/health` reaches us; `/healthz` still
+// works locally and behind any other proxy.
+router.get(["/healthz", "/health"], (req, res) => res.json({ status: "ok" }));
 
 // Guardian session auth (httpOnly-cookie based):
 //   /auth/guardian-login, /auth/guardian-qr-login, /auth/me, /auth/logout
