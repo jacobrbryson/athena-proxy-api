@@ -244,6 +244,55 @@ router.post("/devices/pair", pairLimiter, jsonParser, forwardPublic("POST", "/de
 router.get("/llm/manifest", forwardPublic("GET", "/llm/manifest"));
 
 // -------------------------------------------------------------------
+// 1e. OAUTH CONNECTOR CALLBACK (public, browser navigation)
+// -------------------------------------------------------------------
+// Google / Strava / Whoop redirect the user's BROWSER here after consent.
+// There is no Athena JWT on that navigation, so this must sit before
+// verifyAppToken; core_api authenticates it on the single-use `state` it
+// recorded when the flow started. The registered redirect URI points at this
+// path, which is why core_api's PUBLIC_API_BASE_URL names the proxy.
+//
+// Unlike forwardPublic this must NOT follow the upstream redirect — the 302
+// is the response, and it belongs to the browser.
+const connectorCallbackLimiter = rateLimit({
+	windowMs: 15 * 60 * 1000,
+	max: 30,
+	standardHeaders: true,
+	legacyHeaders: false,
+	message: { success: false, message: "Too many authorization attempts. Please wait and try again." },
+});
+
+router.get(
+	"/integrations/:provider/callback",
+	connectorCallbackLimiter,
+	async (req, res) => {
+		const provider = encodeURIComponent(req.params.provider);
+		const query = new URLSearchParams(req.query).toString();
+		try {
+			const headers = { Accept: "application/json" };
+			if (IS_CLOUD_RUN) {
+				headers.authorization = `Bearer ${await getAuthToken()}`;
+			}
+			const upstream = await fetch(
+				`${API_TARGET}/integrations/${provider}/callback${query ? `?${query}` : ""}`,
+				{ method: "GET", headers, redirect: "manual" }
+			);
+
+			const location = upstream.headers.get("location");
+			if (location) return res.redirect(upstream.status, location);
+
+			const data = await upstream.json().catch(() => ({}));
+			return res.status(upstream.status).json(data);
+		} catch (err) {
+			console.error(`[PROXY] connector callback ${provider} failed:`, err.message);
+			return res
+				.status(502)
+				.json({ success: false, message: "Failed to reach Athena API" });
+		}
+	}
+);
+
+// -------------------------------------------------------------------
 // 2. PROXY MIDDLEWARE (Handles all other routes)
 // -------------------------------------------------------------------
 
