@@ -297,6 +297,10 @@ router.get(
 // -------------------------------------------------------------------
 
 // This middleware runs on all subsequent requests that didn't match /auth/google
+// WHOOP authenticates with its raw-body signature at core_api. Do not parse or
+// reserialize the body, and do not allow a provider request to supply a user JWT.
+router.post('/webhooks/whoop', require('./whoopWebhook'));
+
 router.use(verifyAppToken);
 router.use("/access", rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
 	message: { message: "Too many access checks. Please wait and retry." } }));
