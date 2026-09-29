@@ -20,29 +20,9 @@ function getCookie(cookieHeader, name) {
 	return null;
 }
 
-function normalizeIp(ip) {
-	if (!ip) return null;
-	if (ip.startsWith("::ffff:")) return ip.slice(7);
-	if (ip === "::1") return "127.0.0.1";
-	return ip;
-}
-
-function extractRequestIp(req) {
-	const forwarded = req.headers["x-forwarded-for"];
-	if (forwarded) {
-		const forwardedList = Array.isArray(forwarded)
-			? forwarded
-			: String(forwarded)
-					.split(",")
-					.map((ip) => ip.trim())
-					.filter(Boolean);
-
-		const clientIp = normalizeIp(forwardedList[0] || null);
-		if (clientIp) return clientIp;
-	}
-
-	return normalizeIp(req.socket.remoteAddress);
-}
+// The rightmost X-Forwarded-For hop — see utils/clientIp. The leftmost one is
+// whatever the client wrote, and was enough to pass the IP pin below.
+const { trustedClientIp, normalizeIp } = require("../utils/clientIp");
 
 /**
  * Reject an upgrade with a real HTTP response before closing. A bare
@@ -118,7 +98,7 @@ module.exports = function wsProxy(server, proxy) {
 			const decoded = jwt.verify(token, JWT_SECRET);
 
 			const tokenIp = normalizeIp(decoded.client_ip);
-			const requestIp = extractRequestIp(req);
+			const requestIp = trustedClientIp(req);
 			if (!tokenIp || tokenIp !== requestIp) {
 				console.warn(
 					`WS Auth: IP mismatch token=${tokenIp} request=${requestIp}`,
@@ -126,6 +106,10 @@ module.exports = function wsProxy(server, proxy) {
 				rejectUpgrade(socket, "401 Unauthorized", "ip-mismatch");
 				return;
 			}
+
+			// core_api reads the client IP from this header: hand it exactly
+			// the one we verified, never the client's own.
+			req.headers["x-forwarded-for"] = requestIp;
 
 			// Preserve the validated user token for downstream app auth.
 			req.headers["x-user-authorization"] = `Bearer ${token}`;

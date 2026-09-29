@@ -1,5 +1,6 @@
 const httpProxy = require("http-proxy");
 const { API_TARGET } = require("../config");
+const { trustedClientIp } = require("../utils/clientIp");
 const bodyParser = require("body-parser"); // <-- Make sure to install: npm install body-parser
 
 const proxy = httpProxy.createProxyServer({
@@ -14,6 +15,13 @@ const jsonParser = bodyParser.json();
 // This handles requests where the body was read by the jsonParser
 // in the router (like /auth/google) and re-inserts the data into the stream.
 proxy.on("proxyReq", (proxyReq, req, res, options) => {
+	// core_api reads the client IP from X-Forwarded-For. Forward only the
+	// address Google vouched for (req.ip under trust proxy 1) — never the
+	// entries the client wrote itself. See utils/clientIp.
+	const clientIp = req.ip || trustedClientIp(req);
+	if (clientIp) proxyReq.setHeader("x-forwarded-for", clientIp);
+	else proxyReq.removeHeader("x-forwarded-for");
+
 	// Check if the request has a parsed body and is a method that needs one
 	if (
 		req.body &&
