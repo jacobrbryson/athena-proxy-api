@@ -11,14 +11,17 @@ const wsProxy = require("./wsProxy");
 const VICTIM = "203.0.113.7";
 const ATTACKER = "198.51.100.1";
 
-function upgrade(xff) {
+function upgrade(xff, { inUrl = false } = {}) {
 	const server = new EventEmitter();
 	const proxy = { ws: jest.fn() };
 	wsProxy(server, proxy);
 	const token = jwt.sign({ google_id: "g-1", client_ip: VICTIM }, JWT_SECRET);
 	const req = {
-		url: `/ws?sessionId=s-1&token=${token}`,
-		headers: { "x-forwarded-for": xff },
+		url: inUrl ? `/ws?sessionId=s-1&token=${token}` : "/ws?sessionId=s-1",
+		headers: {
+			"x-forwarded-for": xff,
+			...(inUrl ? {} : { "sec-websocket-protocol": `athena.v1, athena.ticket.${token}` }),
+		},
 		socket: { remoteAddress: "10.0.0.1" },
 	};
 	const socket = { writable: true, write: jest.fn(), destroy: jest.fn() };
@@ -42,4 +45,17 @@ it("accepts the owner, and forwards only their verified IP to core_api", async (
 	const { req, proxy } = await upgrade(`9.9.9.9, ${VICTIM}`);
 	expect(proxy.ws).toHaveBeenCalled();
 	expect(req.headers["x-forwarded-for"]).toBe(VICTIM);
+});
+
+it("passes only the plain protocol on, so the ticket never reaches core_api", async () => {
+	const { req, proxy } = await upgrade(VICTIM);
+	expect(proxy.ws).toHaveBeenCalled();
+	expect(req.headers["sec-websocket-protocol"]).toBe("athena.v1");
+	expect(req.headers["x-user-authorization"]).toMatch(/^Bearer /);
+});
+
+it("no longer accepts a ticket in the URL", async () => {
+	const { socket, proxy } = await upgrade(VICTIM, { inUrl: true });
+	expect(proxy.ws).not.toHaveBeenCalled();
+	expect(socket.write.mock.calls[0][0]).toMatch(/401[\s\S]*missing-token/);
 });

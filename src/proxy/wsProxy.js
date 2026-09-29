@@ -47,6 +47,17 @@ function rejectUpgrade(socket, status, reason) {
 	socket.destroy();
 }
 
+const PROTOCOL = "athena.v1";
+const TICKET_PREFIX = "athena.ticket.";
+
+function parseProtocols(header) {
+	if (!header) return [];
+	return String(header)
+		.split(",")
+		.map((p) => p.trim())
+		.filter(Boolean);
+}
+
 function redactWsUrl(reqUrl) {
 	const url = new URL(reqUrl, "http://localhost");
 	if (url.searchParams.has("token")) {
@@ -67,19 +78,20 @@ module.exports = function wsProxy(server, proxy) {
 
 		const authHeader =
 			req.headers["x-user-authorization"] || req.headers.authorization;
-		const url = new URL(req.url, "http://localhost");
-		const queryToken = url.searchParams.get("token");
 
 		let token =
 			authHeader && authHeader.startsWith("Bearer ")
 				? authHeader.slice("Bearer ".length)
 				: null;
 
-		// Fallback: allow token via query param (since browsers can't set WS headers)
-		if (!token && queryToken) {
-			token = queryToken.startsWith("Bearer ")
-				? queryToken.slice("Bearer ".length)
-				: queryToken;
+		// Browsers can't set headers on a WebSocket, so the ticket rides in the
+		// subprotocol list instead: new WebSocket(url, ["athena.v1",
+		// "athena.ticket.<jwt>"]). Never in the URL — Cloud Run's request log
+		// records every URL, and a ticket there is a credential in a log.
+		const offered = parseProtocols(req.headers["sec-websocket-protocol"]);
+		if (!token) {
+			const entry = offered.find((p) => p.startsWith(TICKET_PREFIX));
+			if (entry) token = entry.slice(TICKET_PREFIX.length);
 		}
 
 		// Fallback: Guardian session cookie (sent automatically on the upgrade
@@ -105,6 +117,13 @@ module.exports = function wsProxy(server, proxy) {
 				);
 				rejectUpgrade(socket, "401 Unauthorized", "ip-mismatch");
 				return;
+			}
+
+			// The ticket stops here. core_api answers with the plain protocol,
+			// which the browser requires when it offered any.
+			if (offered.length) {
+				req.headers["sec-websocket-protocol"] = offered.includes(PROTOCOL) ? PROTOCOL : undefined;
+				if (!req.headers["sec-websocket-protocol"]) delete req.headers["sec-websocket-protocol"];
 			}
 
 			// core_api reads the client IP from this header: hand it exactly
