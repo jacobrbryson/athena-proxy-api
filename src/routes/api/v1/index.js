@@ -292,6 +292,12 @@ router.get(
 	}
 );
 
+// The shared Google callback: Google returns the browser to one page on the
+// companion app for every Google flow, and that page posts the query here.
+// Public for the same reason as the GET above — core_api authenticates on the
+// single-use state — and under the same per-IP limit.
+router.post("/integrations/callback", connectorCallbackLimiter, jsonParser, forwardPublic("POST", "/integrations/callback"));
+
 // -------------------------------------------------------------------
 // 2. PROXY MIDDLEWARE (Handles all other routes)
 // -------------------------------------------------------------------
