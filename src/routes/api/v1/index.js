@@ -246,7 +246,7 @@ router.get("/llm/manifest", forwardPublic("GET", "/llm/manifest"));
 // -------------------------------------------------------------------
 // 1e. OAUTH CONNECTOR CALLBACK (public, browser navigation)
 // -------------------------------------------------------------------
-// Google / Strava / Whoop redirect the user's BROWSER here after consent.
+// Google / Whoop redirect the user's BROWSER here after consent.
 // There is no Athena JWT on that navigation, so this must sit before
 // verifyAppToken; core_api authenticates it on the single-use `state` it
 // recorded when the flow started. The registered redirect URI points at this
