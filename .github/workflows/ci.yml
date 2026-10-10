@@ -1,0 +1,40 @@
+# CI — the checks a pull request must pass before it can merge.
+#
+# Branch protection on main requires this check (and "Protected paths"), so an
+# agent's pull request can only auto-merge when these pass. Runs with a
+# read-only token and no secrets; nothing here deploys — Cloud Build deploys
+# on push to main, as before.
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
+      - name: Tests
+        env:
+          CI: "true"
+        run: npx jest --ci --runInBand --forceExit
