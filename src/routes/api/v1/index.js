@@ -306,6 +306,8 @@ router.post("/integrations/callback", connectorCallbackLimiter, jsonParser, forw
 // WHOOP authenticates with its raw-body signature at core_api. Do not parse or
 // reserialize the body, and do not allow a provider request to supply a user JWT.
 router.post('/webhooks/whoop', require('./whoopWebhook'));
+// Google Nest events via Pub/Sub push; core_api verifies Google's OIDC token.
+router.post('/webhooks/nest', require('./nestWebhook'));
 
 router.use(verifyAppToken);
 router.use("/access", rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
