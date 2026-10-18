@@ -308,6 +308,8 @@ router.post("/integrations/callback", connectorCallbackLimiter, jsonParser, forw
 router.post('/webhooks/whoop', require('./whoopWebhook'));
 // Google Nest events via Pub/Sub push; core_api verifies Google's OIDC token.
 router.post('/webhooks/nest', require('./nestWebhook'));
+// Household Eufy bridge events with one frame each; core_api checks the bridge token.
+router.post('/webhooks/eufy', rateLimit({ windowMs: 60 * 1000, max: 120, standardHeaders: true, legacyHeaders: false }), require('./eufyEvents'));
 
 router.use(verifyAppToken);
 router.use("/access", rateLimit({ windowMs: 15 * 60 * 1000, max: 60, standardHeaders: true, legacyHeaders: false,
