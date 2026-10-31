@@ -12,7 +12,7 @@ module.exports = {
 	API_TARGET: process.env.API_TARGET || "http://localhost:3002",
 	API_AUDIENCE: process.env.API_AUDIENCE || process.env.API_TARGET || "http://localhost:3002",
 	RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS || 60000,
-	RATE_LIMIT_MAX_REQUESTS: process.env.RATE_LIMIT_MAX_REQUESTS || 100,
+	RATE_LIMIT_MAX_REQUESTS: process.env.RATE_LIMIT_MAX_REQUESTS || 600,
 	GOOGLE_CLIENT_ID: process.env.GOOGLE_CLIENT_ID || "",
 	JWT_SECRET: process.env.JWT_SECRET || null,
 
